@@ -2,96 +2,203 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Page</title>
+    <meta name="viewport" content="width=, initial-scale=1.0">
+    <title>Authentication Page</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.5.1/axios.min.js" integrity="sha512-emSwuKiMyYedRwflbZB2ghzX8Cw8fmNVgZ6yQNNXXagFzFOaQmbvQ1vmDkddHjm5AITcBIZfC7k4ShQSjgPAmQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jwt-decode/3.1.2/jwt-decode.min.js" integrity="sha512-2JdQyxxo1Kg/o4d90CFbNk4H6QQv/EHEIpKgx0NZwYtydAfwpvtId6UFb5FEUwQ6wxR3GyCLNeFhMx0w27WBNw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <style>
+        .container-fluid {
+            max-width: 600px;
+            margin: 50px auto;
+        }
+        .button-row button {
+            margin-right: 10px;
+        }
+        #message {
+            margin-top: 20px;
+        }
+    </style>
 </head>
 <body>
 
+
 <div class="container-fluid">
-    <h1 class="row">Sign In</h1>
+    <h1 class="row" id="page-title">Authentication</h1>
 
     <main>
-        <div class="form-group row">
+        <!-- Registration Section -->
+        <div id="register-section" class="form-group row">
+            <h2>Register</h2>
+            <label for="reg-username">Username</label>
+            <input type="text" class="form-control" name="reg-username" id="reg-username">
+
+            <label for="reg-password">Password</label>
+            <input type="password" class="form-control" name="reg-password" id="reg-password">
+
+            <button class="btn btn-success" onclick="register()">Register</button>
+        </div>
+
+        <hr>
+
+        <!-- Login Section -->
+        <div id="login-section" class="form-group row">
+            <h2>Login</h2>
             <label for="username">Username</label>
             <input type="text" class="form-control" name="username" id="username">
-        </div>
 
-        <div class="form-group row">
             <label for="password">Password</label>
             <input type="password" class="form-control" name="password" id="password">
+
+            <div class="button-row">
+                <button class="btn btn-primary" onclick="authenticate()">Login</button>
+                <button class="btn btn-info" onclick="loadDashboard()">Get Dashboard</button>
+                <button class="btn btn-info" onclick="loadSettings()">Settings</button>
+            </div>
         </div>
 
-        <div class="button-row">
-            <button class="btn btn-primary" onclick="authenticate()">Sign In</button>
-            <button class="btn btn-secondary" onclick="loadDashboard()">View Dashboard</button>
-            <button class="btn btn-secondary" onclick="loadSettings()">Settings</button>
-        </div>
+        <!-- Message Display -->
+        <div id="message" class="alert" style="display: none;"></div>
     </main>
 </div>
 
 <script>
-    function authenticate() {
-        const userData = {
-            username: document.getElementById('username').value,
-            password: document.getElementById('password').value,
-        };
-        axios.post('/api/login', userData)
-            .then(response => {
-                console.log(response);
-                document.getElementById('username').value = '';
-                document.getElementById('password').value = '';
-                if (response && response.data && response.data.success) {
-                    const userToken = response.data.token;
-                    localStorage.setItem('jwt_token', userToken);
-                    loadDashboard();
+    // Function to display messages to the user
+    function showMessage(message, type = 'success') {
+        const msgDiv = document.getElementById('message');
+        msgDiv.className = `alert alert-${type}`;
+        msgDiv.innerText = message;
+        msgDiv.style.display = 'block';
+        setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+    }
+
+    // Registration Function
+    function register() {
+        const username = document.getElementById('reg-username').value.trim();
+        const password = document.getElementById('reg-password').value.trim();
+
+        if (!username || !password) {
+            showMessage('Please enter both username and password.', 'warning');
+            return;
+        }
+
+        axios.post('/api/register', { username, password })
+            .then(res => {
+                if (res.data.success) {
+                    showMessage('Registration successful! You can now log in.', 'success');
+                    document.getElementById('reg-username').value = '';
+                    document.getElementById('reg-password').value = '';
+                } else {
+                    showMessage(res.data.error, 'danger');
+                }
+            })
+            .catch(err => {
+                if (err.response && err.response.data && err.response.data.error) {
+                    showMessage(err.response.data.error, 'danger');
+                } else {
+                    showMessage('Registration failed. Please try again.', 'danger');
                 }
             });
     }
 
+    // Authentication Function
+    function authenticate() {
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value.trim();
+
+        if (!username || !password) {
+            showMessage('Please enter both username and password.', 'warning');
+            return;
+        }
+
+        axios.post('/api/login', { username, password })
+            .then(res => {
+                if (res.data.success && res.data.token) {
+                    localStorage.setItem('jwt_token', res.data.token);
+                    showMessage('Login successful!', 'success');
+                    document.getElementById('username').value = '';
+                    document.getElementById('password').value = '';
+                } else {
+                    showMessage('Login failed. Please check your credentials.', 'danger');
+                }
+            })
+            .catch(err => {
+                if (err.response && err.response.data && err.response.data.error) {
+                    showMessage(err.response.data.error, 'danger');
+                } else {
+                    showMessage('Login failed. Please try again.', 'danger');
+                }
+            });
+    }
+
+    // Load Dashboard Function
     function loadDashboard() {
-        const authToken = localStorage.getItem('jwt_token');
+        const token = localStorage.getItem('jwt_token');
+        if (!token) {
+            showMessage('Please log in first.', 'warning');
+            return;
+        }
+
         axios.get('/api/dashboard', {
             headers: {
-                'Authorization': `Bearer ${authToken}`
+                'Authorization': `Bearer ${token}`
             }
-        }).then(response => {
-            if (response && response.data && response.data.success) {
-                document.querySelector('h1.row').innerHTML = 'User Dashboard';
-                document.querySelector('main').innerHTML = response.data.dashboardContent;
+        }).then(res => {
+            if (res.data.success) {
+                document.getElementById('page-title').innerText = 'Dashboard';
+                document.querySelector('main').innerHTML = `<p>${res.data.myContent}</p>`;
                 history.pushState(null, '', '/dashboard');
             } else {
                 localStorage.removeItem('jwt_token');
                 window.location.href = '/';
             }
+        }).catch(err => {
+            localStorage.removeItem('jwt_token');
+            window.location.href = '/';
         });
     }
 
+    // Load Settings Function
     function loadSettings() {
-        const authToken = localStorage.getItem('jwt_token');
+        const token = localStorage.getItem('jwt_token');
+        if (!token) {
+            showMessage('Please log in first.', 'warning');
+            return;
+        }
+
         axios.get('/api/settings', {
             headers: {
-                'Authorization': `Bearer ${authToken}`
+                'Authorization': `Bearer ${token}`
             }
-        }).then(response => {
-            if (response && response.data && response.data.success) {
-                document.querySelector('h1.row').innerHTML = 'Settings Page';
-                document.querySelector('main').innerHTML = response.data.settingsDetails;
+        }).then(res => {
+            if (res.data.success) {
+                document.getElementById('page-title').innerText = 'Settings';
+                document.querySelector('main').innerHTML = `<p>${res.data.settingsContent}</p>`;
                 history.pushState(null, '', '/settings');
             } else {
                 localStorage.removeItem('jwt_token');
                 window.location.href = '/';
             }
+        }).catch(err => {
+            localStorage.removeItem('jwt_token');
+            window.location.href = '/';
         });
     }
 
+    // Verify Token Expiry on Page Load
     function verifyTokenExpiry() {
-        const authToken = localStorage.getItem('jwt_token');
-        if (authToken) {
-            const decodedData = jwt.decode(authToken);
-            const currentTimestamp = Math.floor(Date.now() / 1000);
-            if (decodedData.exp < currentTimestamp) {
+        const token = localStorage.getItem('jwt_token');
+        if (token) {
+            try {
+                const decoded = jwt_decode(token);
+                const currentTime = Math.floor(Date.now() / 1000);
+                if (decoded.exp < currentTime) {
+                    localStorage.removeItem('jwt_token');
+                    showMessage('Session expired. Please log in again.', 'warning');
+                    window.location.href = '/';
+                }
+            } catch (e) {
+                localStorage.removeItem('jwt_token');
                 window.location.href = '/';
             }
         }
