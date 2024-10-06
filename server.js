@@ -1,163 +1,127 @@
-require('dotenv').config();
-const express = require('express'); 
+const express = require('express');
 const app = express();
 const jwt = require('jsonwebtoken');
-const { expressjwt: jwtMiddleware } = require('express-jwt'); // Correct import for express-jwt v6+
+const jwt_decode = require('jwt-decode');
+const exjwt = require('express-jwt');
+const bodyParser = require('body-parser');
 const path = require('path');
-const bcrypt = require('bcrypt');
 
-const PORT = process.env.PORT || 3000;
-const secretKey = process.env.SECRET_KEY;
-
-// Use express built-in middleware for parsing JSON and URL-encoded data
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// CORS headers
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN); // Use environment variable
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-type,Authorization');
     next();
 });
 
-// JWT Middleware
-const jwtProtection = jwtMiddleware({
-    secret: secretKey,
+const PORT = 3000;
+const SecretKey = 'My super secret Key';
+const jwtMW = exjwt({
+    secret: SecretKey,
     algorithms: ['HS256'],
+    expiresIn: '3m' // Set the expiration time for JWT tokens to 3 minutes
 });
 
-// In-memory user data (for demonstration purposes)
 let users = [
     {
         id: 1,
-        username: 'Rohith',
-        password: '$2b$10$yourhashedpasswordhere', // Replace with hashed passwords
+        username: 'rohith',
+        password: '123'
     },
     {
         id: 2,
-        username: 'Surya',
-        password: '$2b$10$anotherhashedpassword', // Replace with hashed passwords
+        username: 'ram',
+        password: '456'
     }
 ];
 
-// Helper function to find user by username
-const findUserByUsername = (username) => users.find(user => user.username === username);
+// Login endpoint
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    let token = null; // Initialize token to null
 
-// Registration Route
-app.post('/api/register', async (req, res) => {
+    for (let user of users) {
+        if (username === user.username && password === user.password) {
+            token = jwt.sign({ id: user.id, username: user.username }, SecretKey, { expiresIn: '7d' });
+            break; // Break the loop if a matching user is found
+        }
+    }
+    if (token) {
+        res.json({
+            success: true,
+            err: null,
+            token
+        });
+    } else {
+        res.status(401).json({
+            success: false,
+            token: null,
+            err: 'Username or password is incorrect'
+        });
+    }
+});
+
+// Registration endpoint
+app.post('/api/register', (req, res) => {
     const { username, password } = req.body;
 
-    // Basic input validation
-    if (!username || !password) {
+    // Check if the username is already taken
+    const existingUser = users.find(user => user.username === username);
+    if (existingUser) {
         return res.status(400).json({
             success: false,
-            error: 'Username and password are required',
+            err: 'Username already taken'
         });
     }
 
-    // Check if user already exists
-    if (findUserByUsername(username)) {
-        return res.status(409).json({
-            success: false,
-            error: 'Username already exists',
-        });
-    }
+    // Create a new user
+    const newUser = {
+        id: users.length + 1,
+        username,
+        password
+    };
 
-    try {
-        // Hash the password
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Create new user
-        const newUser = {
-            id: users.length + 1,
-            username,
-            password: hashedPassword,
-        };
-
-        users.push(newUser);
-
-        res.status(201).json({
-            success: true,
-            message: 'User registered successfully',
-        });
-    } catch (err) {
-        res.status(500).json({
-            success: false,
-            error: 'Internal server error',
-        });
-    }
-});
-
-// Login Route
-app.post('/api/login', async (req, res) => {
-    const { username, password } = req.body;
-    const user = findUserByUsername(username);
-
-    if (!user) {
-        return res.status(401).json({
-            success: false,
-            token: null,
-            error: 'Username or password is incorrect',
-        });
-    }
-
-    try {
-        // Compare password with hashed password
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (isMatch) {
-            const token = jwt.sign(
-                { id: user.id, username: user.username },
-                secretKey,
-                { expiresIn: '3m' }
-            );
-            res.json({
-                success: true,
-                error: null,
-                token
-            });
-        } else {
-            res.status(401).json({
-                success: false,
-                token: null,
-                error: 'Username or password is incorrect',
-            });
-        }
-    } catch (err) {
-        res.status(500).json({
-            success: false,
-            token: null,
-            error: 'Internal server error',
-        });
-    }
-});
-
-// Protected Dashboard Route
-app.get('/api/dashboard', jwtProtection, (req, res) => {
+    users.push(newUser);
     res.json({
         success: true,
-        myContent: 'Secret content that only logged-in users can see'
+        err: null
     });
 });
 
-// Protected Settings Route
-app.get('/api/settings', jwtProtection, (req, res) => {
+// Protected routes
+app.get('/api/dashboard', jwtMW, (req, res) => {
     res.json({
         success: true,
-        settingsContent: 'This is a protected settings page'
+        myContent: 'Secret content that only logged in people can see!!!'
     });
 });
 
-// Serve Index File
+app.get('/api/price', jwtMW, (req, res) => {
+    res.json({
+        success: true,
+        myContent: 'This is my route Settings(protected)'
+    });
+});
+
+app.get('/api/settings', jwtMW, (req, res) => {
+    res.json({
+        success: true,
+        myContent: 'Settings page content (protected)'
+    });
+});
+
+// Serve the HTML file
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Error Handling Middleware for Unauthorized Access
-app.use((err, req, res, next) => {
+// Error handling for unauthorized access
+app.use(function (err, req, res, next) {
     if (err.name === 'UnauthorizedError') {
         res.status(401).json({
             success: false,
-            error: 'Unauthorized access, invalid token'
+            officialError: err,
+            err: 'Username or password is incorrect 2'
         });
     } else {
         next(err);
@@ -166,5 +130,5 @@ app.use((err, req, res, next) => {
 
 // Start the server
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`Serving on port ${PORT}`);
 });
